@@ -27,3 +27,6 @@ build-backend = "poetry.core.masonry.api"
 [tool.poetry.scripts]
 tp1 = "tp1.main:main"
 tp3 = "tp3.main:main"
+
+[tool.ruff]
+line-length = 110
