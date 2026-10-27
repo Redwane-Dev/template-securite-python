@@ -11,3 +11,6 @@ app.log
 .env
 
 app.log
+
+# sorties du TP2
+out/
