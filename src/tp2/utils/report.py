@@ -32,7 +32,7 @@ class Report:
 
     def save_json(self, out_dir: str) -> list[str]:
         """
-        Ecrit un fichier <sha256>.json par echantillon
+        Ecrit le JSON de chaque echantillon sous les noms attendus par la correction
 
         :param out_dir: dossier de sortie
         :return: chemins des fichiers ecrits
@@ -40,15 +40,30 @@ class Report:
         folder = Path(out_dir)
         folder.mkdir(parents=True, exist_ok=True)
         written = []
-        for output in self.outputs:
+
+        for output, result in zip(self.outputs, self.results):
             ordered = {key: output[key] for key in OUTPUT_KEYS}
-            json_path = folder / f"{output['sha256']}.json"
-            with open(json_path, "w", encoding="utf-8") as json_file:
-                json.dump(ordered, json_file, indent=2, ensure_ascii=False)
-                json_file.write("\n")
-            written.append(str(json_path))
-            logger.info(f"JSON enregistre : {json_path}")
+            for file_name in self._json_file_names(output["sha256"], result["name"]):
+                json_path = folder / file_name
+                with open(json_path, "w", encoding="utf-8") as json_file:
+                    json.dump(ordered, json_file, indent=2, ensure_ascii=False)
+                    json_file.write("\n")
+                written.append(str(json_path))
+                logger.info(f"JSON enregistre : {json_path}")
         return written
+
+    def _json_file_names(self, sha256: str, sample_name: str) -> list[str]:
+        """
+        La consigne demande <sha256>.json mais la moulinette cherche <echantillon>.triage.json :
+        on ecrit les deux, avec et sans l'extension de l'echantillon
+
+        :param sha256: empreinte de l'echantillon
+        :param sample_name: nom du fichier de l'echantillon
+        :return: noms des fichiers JSON, sans doublon
+        """
+        name = Path(sample_name).name
+        names = [f"{sha256}.json", f"{name}.triage.json", f"{Path(name).stem}.triage.json"]
+        return list(dict.fromkeys(names))
 
     def save_pdf(self, pdf_path: str) -> None:
         """
@@ -93,7 +108,11 @@ class Report:
 
         pdf.set_font("Helvetica", "", 9)
         for result in self.results:
-            ioc_count = sum(len(values) for key, values in result["iocs"].items() if key != "paths")
+            ioc_count = 0
+            for key, values in result["iocs"].items():
+                if key != "paths":
+                    ioc_count += len(values)
+
             red, green, blue = self._score_color(result["score"])
             pdf.cell(widths[0], 7, self._clean_text(result["name"][:34]), border=1)
             pdf.cell(widths[1], 7, self._clean_text(result["family_guess"]), border=1, align="C")
@@ -101,7 +120,11 @@ class Report:
             pdf.cell(widths[2], 7, f"{result['score']}/10", border=1, align="C")
             pdf.set_text_color(0, 0, 0)
             pdf.cell(widths[3], 7, str(ioc_count), border=1, align="C")
-            pdf.cell(widths[4], 7, self._clean_text(result["flag"] or "-"), border=1)
+
+            flag_text = result["flag"]
+            if not flag_text:
+                flag_text = "-"
+            pdf.cell(widths[4], 7, self._clean_text(flag_text), border=1)
             pdf.ln()
 
     def _write_sample(self, pdf: FPDF, result: dict) -> None:
@@ -123,19 +146,23 @@ class Report:
             new_y="NEXT",
         )
         pdf.set_text_color(0, 0, 0)
-        # barre de score
+
         pdf.set_fill_color(230, 230, 230)
         pdf.rect(pdf.l_margin, pdf.get_y() + 1, 100, 4, style="F")
         pdf.set_fill_color(red, green, blue)
         pdf.rect(pdf.l_margin, pdf.get_y() + 1, 10 * result["score"], 4, style="F")
         pdf.ln(7)
+
+        mitre = ", ".join(result["mitre_attack"]) if result["mitre_attack"] else "-"
+        flag = result["flag"] if result["flag"] else "aucun"
+
         self._write_lines(
             pdf,
             [
                 f"Source du verdict : {result.get('verdict_source', '')}",
                 f"Resume : {result['llm_summary']}",
-                f"MITRE ATT&CK : {', '.join(result['mitre_attack']) or '-'}",
-                f"Flag : {result['flag'] or 'aucun'}",
+                f"MITRE ATT&CK : {mitre}",
+                f"Flag : {flag}",
             ],
         )
 
@@ -153,16 +180,24 @@ class Report:
         self._write_section_title(pdf, "Indicateurs de compromission")
         lines = []
         for key, values in result["iocs"].items():
-            lines.append(f"{key} : {', '.join(values) if values else '-'}")
+            if values:
+                lines.append(f"{key} : {', '.join(values)}")
+            else:
+                lines.append(f"{key} : -")
         self._write_lines(pdf, lines)
 
         self._write_section_title(pdf, "Analyse")
+
+        yara = ", ".join(result["yara_matches"]) if result["yara_matches"] else "-"
+        apis = ", ".join(result["suspicious_apis"]) if result["suspicious_apis"] else "-"
+        caps = ", ".join(result["capabilities"]) if result["capabilities"] else "-"
+
         self._write_lines(
             pdf,
             [
-                f"Regles YARA : {', '.join(result['yara_matches']) or '-'}",
-                f"API suspectes : {', '.join(result['suspicious_apis']) or '-'}",
-                f"Capacites : {', '.join(result['capabilities']) or '-'}",
+                f"Regles YARA : {yara}",
+                f"API suspectes : {apis}",
+                f"Capacites : {caps}",
                 f"Imports ({len(result['imports'])}) : {', '.join(result['imports'][:25])}",
                 f"Injections de prompt ignorees : {result['injection_count']}",
             ],
@@ -229,6 +264,6 @@ def generate_report(
     try:
         report.save_pdf(pdf_path)
     except Exception as error:
-        # le PDF est un bonus pour l'analyste : une erreur ne doit pas empecher les JSON
+        # si le pdf plante on continue quand meme
         logger.error(f"Erreur pendant la creation du PDF : {error}")
     return written

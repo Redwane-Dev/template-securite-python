@@ -60,19 +60,33 @@ def test_given_results_when_init_then_attributes_are_set():
     assert report.title == "Rapport de triage de malware - TP2"
 
 
-def test_given_output_when_save_json_then_file_is_named_with_sha256(tmp_path):
+def test_given_output_when_save_json_then_file_is_written_under_each_expected_name(tmp_path):
     # Given
     result = _result()
     report = Report([result], [_output(result)])
+    out = tmp_path / "out"
 
     # When
-    written = report.save_json(str(tmp_path / "out"))
+    written = report.save_json(str(out))
 
     # Then
-    assert written == [str(tmp_path / "out" / f"{'a' * 64}.json")]
-    data = json.loads((tmp_path / "out" / f"{'a' * 64}.json").read_text(encoding="utf-8"))
-    assert list(data.keys()) == OUTPUT_KEYS
-    assert data["flag"] == "ESGI{test}"
+    expected_names = [f"{'a' * 64}.json", "sample1_dropper.bin.triage.json", "sample1_dropper.triage.json"]
+    assert written == [str(out / name) for name in expected_names]
+    for name in expected_names:
+        data = json.loads((out / name).read_text(encoding="utf-8"))
+        assert list(data.keys()) == OUTPUT_KEYS
+        assert data["flag"] == "ESGI{test}"
+
+
+def test_given_name_without_extension_when_json_file_names_then_no_duplicate():
+    # Given
+    report = Report([], [])
+
+    # When
+    names = report._json_file_names("abc", "sample")
+
+    # Then
+    assert names == ["abc.json", "sample.triage.json"]
 
 
 def test_given_results_when_save_pdf_then_pdf_is_created(tmp_path):
@@ -167,7 +181,7 @@ def test_given_results_when_generate_report_then_json_and_pdf_are_written(tmp_pa
     written = generate_report([result], [_output(result)], str(tmp_path))
 
     # Then
-    assert len(written) == 1
+    assert len(written) == 3  # <sha256>.json + <echantillon>.triage.json avec et sans extension
     assert (tmp_path / "triage_report.pdf").exists()
 
 
@@ -180,5 +194,5 @@ def test_given_pdf_error_when_generate_report_then_json_are_still_written(tmp_pa
         written = generate_report([result], [_output(result)], str(tmp_path), str(tmp_path / "r.pdf"))
 
     # Then
-    assert len(written) == 1
+    assert len(written) == 3  # <sha256>.json + <echantillon>.triage.json avec et sans extension
     assert not (tmp_path / "r.pdf").exists()

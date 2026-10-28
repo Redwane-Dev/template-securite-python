@@ -48,6 +48,8 @@ def test_given_samples_when_main_then_one_json_per_sample_is_written(tmp_path, s
     samples.mkdir()
     (samples / "dropper.bin").write_bytes(sample_data)
     (samples / "clean.txt").write_text("rien de suspect ici")
+    # GROUP.txt identifie le groupe, ce n'est pas un echantillon : il doit etre ignore
+    (samples / "GROUP.txt").write_text("groupe 4")
     out = tmp_path / "out"
 
     # When
@@ -55,10 +57,16 @@ def test_given_samples_when_main_then_one_json_per_sample_is_written(tmp_path, s
 
     # Then
     assert exit_code == 0
-    reports = sorted(out.glob("*.json"))
-    assert len(reports) == 2
-    flags = sorted(json.loads(path.read_text(encoding="utf-8"))["flag"] for path in reports)
-    assert flags == ["", "ESGI{vrai_flag_123}"]
+    reports = sorted(path.name for path in out.glob("*.triage.json"))
+    assert reports == [
+        "clean.triage.json",
+        "clean.txt.triage.json",
+        "dropper.bin.triage.json",
+        "dropper.triage.json",
+    ]
+    assert len(list(out.glob("*.json"))) == 6
+    flag = json.loads((out / "dropper.bin.triage.json").read_text(encoding="utf-8"))["flag"]
+    assert flag == "ESGI{vrai_flag_123}"
     assert (out / "triage_report.pdf").exists()
 
 

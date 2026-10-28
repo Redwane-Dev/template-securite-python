@@ -9,9 +9,7 @@ from tp2.utils.triage import SampleTriage
 
 
 def _parse_arguments(arguments: list[str] | None = None) -> argparse.Namespace:
-    """
-    Lit les options de la ligne de commande
-    """
+    """Lit les options de la ligne de commande."""
     parser = argparse.ArgumentParser(prog="tp2", description="Triage automatise de malware")
     parser.add_argument("--samples", required=True, help="dossier des echantillons a analyser")
     parser.add_argument("--rules", default="rules", help="dossier des regles YARA (defaut: rules)")
@@ -24,9 +22,7 @@ def _parse_arguments(arguments: list[str] | None = None) -> argparse.Namespace:
 
 
 def _list_samples(samples_dir: str, out_dir: str) -> list[str]:
-    """
-    Liste les fichiers a analyser (sous-dossiers compris), sans les fichiers caches ni le dossier de sortie
-    """
+    """Liste les fichiers a analyser, sans les fichiers caches ni le dossier de sortie."""
     folder = Path(samples_dir)
     if not folder.is_dir():
         return []
@@ -34,6 +30,8 @@ def _list_samples(samples_dir: str, out_dir: str) -> list[str]:
     samples = []
     for path in sorted(folder.rglob("*")):
         if not path.is_file() or path.name.startswith("."):
+            continue
+        if path.name == "GROUP.txt":
             continue
         if output_folder in path.resolve().parents:
             continue
