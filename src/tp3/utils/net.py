@@ -55,7 +55,7 @@ class NetworkPhase:
         while b"\n" not in buffer:
             try:
                 chunk = connection.recv(4096)
-            except socket.timeout:
+            except TimeoutError:
                 return None, buffer
             if not chunk:
                 return None, buffer
