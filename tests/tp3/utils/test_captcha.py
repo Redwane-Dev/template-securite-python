@@ -46,3 +46,15 @@ def test_given_unreadable_image_when_solve_then_returns_empty_string() -> None:
 
     # Then
     assert result == ""
+
+
+def test_given_image_when_preprocess_variants_then_returns_three_variants() -> None:
+    # Given
+    solver = CaptchaSolver()
+    image = Image.open(io.BytesIO(_build_captcha_image_bytes()))
+
+    # When
+    variants = solver._preprocess_variants(image)
+
+    # Then
+    assert len(variants) == 3

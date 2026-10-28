@@ -55,3 +55,30 @@ def test_given_no_distinct_path_when_find_hidden_pages_then_returns_empty_list()
 
     # Then
     assert candidates == []
+
+
+def test_given_wordlist_file_when_load_wordlist_then_returns_non_empty_list() -> None:
+    # Given
+    fuzzer = Fuzzer("http://127.0.0.1:8080")
+
+    # When
+    wordlist = fuzzer._load_wordlist()
+
+    # Then
+    assert len(wordlist) > 0
+    assert all(isinstance(word, str) and word for word in wordlist)
+
+
+def test_given_target_when_baseline_then_returns_status_size_and_content_type() -> None:
+    # Given
+    fuzzer = Fuzzer("http://127.0.0.1:8080")
+    response = _make_response(404, b"not found", "text/html")
+
+    with patch.object(fuzzer.session, "get", return_value=response):
+        # When
+        status_code, size, content_type = fuzzer._baseline()
+
+    # Then
+    assert status_code == 404
+    assert size == len(b"not found")
+    assert content_type == "text/html"
